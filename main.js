@@ -1,100 +1,87 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs'); // Necesario para mover el archivo final
 const { spawn } = require('child_process');
+const readline = require('readline');
 
 let mainWindow;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 600,
-        height: 300,
-        resizable: false,
-        maximizable: false,
-        autoHideMenuBar: true,
+        width: 600, height: 300, 
+        icon: path.join(__dirname, 'src/icon.ico'),
+        useContentSize: true, // CRÍTICO: Fuerza a que el interior mida 600x300, revelando el footer.
+        resizable: false, maximizable: false, autoHideMenuBar: true,
         webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
+            nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js')
         }
     });
-
     mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
 }
 
-app.whenReady().then(() => {
-    createWindow();
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    });
-});
+app.whenReady().then(createWindow);
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
-});
-
-// DIÁLOGOS NATIVOS
 ipcMain.handle('dialog:openFiles', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ['openFile', 'multiSelections'],
-        filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+        properties: ['openFile', 'multiSelections'], filters: [{ name: 'Excel', extensions: ['xlsx'] }]
     });
     return result.filePaths;
 });
 
 ipcMain.handle('dialog:saveFile', async () => {
     const result = await dialog.showSaveDialog(mainWindow, {
-        title: 'Guardar archivo consolidado',
-        defaultPath: 'Consolidado.csv',
-        filters: [{ name: 'CSV (Delimitado por comas)', extensions: ['csv'] }]
+        title: 'Guardar consolidado', defaultPath: 'Consolidado.csv',
+        filters: [{ name: 'CSV', extensions: ['csv'] }]
     });
     return result.filePath;
 });
 
-// PUENTE AL MOTOR DE PYTHON (BACKEND)
+// NUEVO: Rutas temporales para el flujo de guardado retrasado
+ipcMain.handle('file:getTempPath', () => {
+    return path.join(app.getPath('temp'), `kiwi_temp_${Date.now()}.csv`);
+});
+
+ipcMain.handle('file:moveFinal', (event, tempPath, finalPath) => {
+    try {
+        fs.copyFileSync(tempPath, finalPath);
+        fs.unlinkSync(tempPath);
+        return true;
+    } catch (e) {
+        console.error("Error al mover archivo:", e);
+        return false;
+    }
+});
+
+// EL MOTOR SE MANTIENE INTACTO
 ipcMain.handle('engine:run', (event, payload) => {
     return new Promise((resolve, reject) => {
-        // Resuelve la ruta del binario tanto en modo de desarrollo como empacado en producción
-        let enginePath;
-        if (app.isPackaged) {
-            enginePath = path.join(process.resourcesPath, 'engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine');
-        } else {
-            enginePath = path.join(__dirname, 'backend', 'dist', 'consol_engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine');
-        }
+        let enginePath = app.isPackaged 
+            ? path.join(process.resourcesPath, 'engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine')
+            : path.join(__dirname, 'backend', 'dist', 'consol_engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine');
 
         const pythonProcess = spawn(enginePath);
-        let outputData = '';
+        let outputData = null;
 
-        // Pasar el payload como string JSON al stdin del proceso de Python
-        pythonProcess.stdin.write(JSON.stringify(payload));
+        pythonProcess.stdin.write(JSON.stringify(payload) + '\n');
         pythonProcess.stdin.end();
 
-        // Escuchar el stdout estructurado
-        pythonProcess.stdout.on('data', (data) => {
-            const lines = data.toString().trim().split('\n');
-            lines.forEach(line => {
-                if(!line) return;
-                try {
-                    const parsed = JSON.parse(line);
-                    if (parsed.status === 'log') {
-                        mainWindow.webContents.send('engine:log', parsed.message);
-                    } else if (parsed.status === 'success') {
-                        outputData = parsed.data; // Almacenamos el payload exitoso
-                    } else if (parsed.status === 'error') {
-                        mainWindow.webContents.send('engine:log', `ERROR: ${parsed.message}`);
-                        reject(parsed.message);
-                    }
-                } catch (e) {
-                    console.log("No-JSON Output:", line);
-                }
-            });
+        const rl = readline.createInterface({ input: pythonProcess.stdout, terminal: false });
+
+        rl.on('line', (line) => {
+            if (!line.trim()) return;
+            try {
+                const parsed = JSON.parse(line);
+                if (parsed.status === 'log') mainWindow.webContents.send('engine:log', parsed.message);
+                else if (parsed.status === 'success') outputData = parsed.data;
+                else if (parsed.status === 'error') reject(parsed.message);
+            } catch (e) { console.error("Ignorado:", line); }
         });
 
+        pythonProcess.stderr.on('data', (data) => console.error(`Error Backend: ${data}`));
         pythonProcess.on('close', (code) => {
-            if (code === 0 && outputData) {
-                resolve(outputData);
-            } else {
-                reject(`Proceso terminado con código ${code}`);
-            }
+            if (code === 0 && outputData) resolve(outputData);
+            else reject(`Fallo en Python (Cód: ${code}).`);
         });
     });
 });

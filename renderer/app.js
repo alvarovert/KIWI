@@ -1,95 +1,80 @@
-// GESTOR DE VISTAS Y ESTADO GLOBAL
 let rutasArchivos = [];
 let columnaSeleccionada = null;
 let registrosSeleccionados = [];
 let rutaSalidaFinal = '';
-
-const views = ['view-inicio', 'view-seleccionados', 'view-aplicar-filtros', 'view-filtros-aplicados', 'view-exito'];
+let rutaTemporalMemoria = ''; // Almacena el path temporal del proceso asíncrono
 
 function navigateTo(targetViewId) {
     const currentView = document.querySelector('.view.active');
     const targetView = document.getElementById(targetViewId);
-
     if (currentView && currentView.id !== targetViewId) {
-        currentView.classList.remove('active');
-        currentView.classList.add('exit');
+        currentView.classList.remove('active'); currentView.classList.add('exit');
         setTimeout(() => currentView.classList.remove('exit'), 350);
     }
     setTimeout(() => targetView.classList.add('active'), 50);
 }
 
-function updateLog(selector, message) {
-    const el = document.getElementById(selector);
-    if(el) el.innerText = message;
+// FUNCIONES UX: REINICIAR Y AÑADIR MÁS ARCHIVOS
+document.getElementById('banner-kiwi').addEventListener('click', () => location.reload()); // Volver al inicio limpiando todo
+
+async function agregarMasArchivos() {
+    const archivos = await window.api.seleccionarArchivos();
+    if (archivos && archivos.length > 0) {
+        const nuevos = archivos.filter(a => !rutasArchivos.includes(a));
+        rutasArchivos = rutasArchivos.concat(nuevos);
+        actualizarTextosArchivos();
+    }
+}
+document.getElementById('txt-cantidad-archivos').addEventListener('click', agregarMasArchivos);
+document.getElementById('txt-cantidad-filtros').addEventListener('click', agregarMasArchivos);
+
+function actualizarTextosArchivos() {
+    const txt = `${rutasArchivos.length} cantidad de archivos`;
+    document.getElementById('txt-cantidad-archivos').innerText = txt;
+    document.getElementById('txt-cantidad-filtros').innerText = txt;
+    document.getElementById('dropzone').innerText = `${rutasArchivos.length} archivos cargados`;
+    if(rutasArchivos.length > 0) document.getElementById('btn-procesar-inicio').removeAttribute('disabled');
 }
 
-// Receptor de logs en tiempo real desde Python
-window.api.onLog((msg) => {
-    console.log(msg);
-    updateLog('log-filtros-activos', msg); // Mostramos progreso en la pantalla de carga
-    updateLog('log-archivos-seleccionados', msg);
-});
-
-// VISTA 1: INICIO (Arrastrar o Clic)
+// INICIO (Vista 1)
 const dropzone = document.getElementById('dropzone');
-const btnProcesarInicio = document.getElementById('btn-procesar-inicio');
-
-dropzone.addEventListener('click', async () => {
-    const archivos = await window.api.seleccionarArchivos();
-    if (archivos && archivos.length > 0) procesarCargaArchivos(archivos);
-});
-
-dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('dragover');
-});
-
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-
+dropzone.addEventListener('click', agregarMasArchivos);
+dropzone.addEventListener('dragover', (e) => e.preventDefault());
 dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
-    dropzone.classList.remove('dragover');
     const archivos = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.xlsx')).map(f => f.path);
-    if (archivos.length > 0) procesarCargaArchivos(archivos);
-});
-
-function procesarCargaArchivos(archivos) {
-    rutasArchivos = archivos;
-    document.getElementById('txt-cantidad-archivos').innerText = `[${rutasArchivos.length}] archivos seleccionados`;
-    btnProcesarInicio.removeAttribute('disabled');
-    document.querySelector('.drop-text').innerText = `${rutasArchivos.length} archivos cargados`;
-}
-
-btnProcesarInicio.addEventListener('click', () => navigateTo('view-seleccionados'));
-
-// VISTA 2: SELECCIONADOS
-document.getElementById('btn-aplicar-filtros').addEventListener('click', async () => {
-    updateLog('log-archivos-seleccionados', 'Leyendo columnas...');
-    try {
-        const respuesta = await window.api.ejecutarMotor({ action: 'get_columns', archivos: rutasArchivos });
-        renderizarColumnas(respuesta.columnas);
-        updateLog('log-archivos-seleccionados', '');
-        navigateTo('view-aplicar-filtros');
-    } catch (e) {
-        updateLog('log-archivos-seleccionados', 'Error al leer columnas');
+    if (archivos.length > 0) {
+        const nuevos = archivos.filter(a => !rutasArchivos.includes(a));
+        rutasArchivos = rutasArchivos.concat(nuevos);
+        actualizarTextosArchivos();
     }
 });
 
-document.getElementById('btn-consolidar-directo').addEventListener('click', () => ejecutarConsolidacion(false));
+document.getElementById('btn-procesar-inicio').addEventListener('click', () => navigateTo('view-seleccionados'));
 
-// VISTA 3: FILTROS
+// SELECCIONADOS (Vista 2)
+document.getElementById('btn-consolidar-directo').addEventListener('click', () => ejecutarConsolidacion(false));
+document.getElementById('btn-aplicar-filtros').addEventListener('click', async () => {
+    try {
+        document.getElementById('btn-aplicar-filtros').innerText = "Cargando columnas...";
+        const res = await window.api.ejecutarMotor({ action: 'get_columns', archivos: rutasArchivos });
+        renderizarColumnas(res.columnas);
+        document.getElementById('btn-aplicar-filtros').innerText = "Aplicar filtros";
+        navigateTo('view-aplicar-filtros');
+    } catch (e) { alert("Error al leer columnas: " + e); }
+});
+
+// FILTROS (Vista 3)
 function renderizarColumnas(columnas) {
     const listaCol = document.getElementById('lista-columnas');
-    listaCol.innerHTML = '';
-    document.getElementById('lista-registros').innerHTML = ''; // Limpiar
+    listaCol.innerHTML = ''; document.getElementById('lista-registros').innerHTML = '';
     
     columnas.forEach(col => {
         const li = document.createElement('li');
-        li.className = 'lista-item';
-        li.innerText = col;
+        li.innerHTML = `<input type="checkbox" readonly> ${col}`;
         li.onclick = async () => {
-            document.querySelectorAll('#lista-columnas .lista-item').forEach(el => el.classList.remove('activo'));
-            li.classList.add('activo');
+            document.querySelectorAll('#lista-columnas input').forEach(el => el.checked = false);
+            li.querySelector('input').checked = true;
             columnaSeleccionada = col;
             await cargarRegistros(col);
         };
@@ -99,76 +84,100 @@ function renderizarColumnas(columnas) {
 
 async function cargarRegistros(columna) {
     const listaReg = document.getElementById('lista-registros');
-    listaReg.innerHTML = '<li class="lista-item">Cargando...</li>';
+    listaReg.innerHTML = '<li>Cargando...</li>';
     try {
-        const respuesta = await window.api.ejecutarMotor({ action: 'get_unique', archivos: rutasArchivos, columna: columna });
+        const res = await window.api.ejecutarMotor({ action: 'get_unique', archivos: rutasArchivos, columna: columna });
         listaReg.innerHTML = '';
-        registrosSeleccionados = []; // Reset
-        
-        respuesta.registros.forEach(reg => {
+        registrosSeleccionados = [];
+        res.registros.forEach(reg => {
             const li = document.createElement('li');
-            li.className = 'lista-item';
-            li.innerHTML = `<input type="checkbox" style="margin-right:8px; pointer-events:none;"> ${reg}`;
-            li.onclick = () => {
-                const cb = li.querySelector('input');
-                cb.checked = !cb.checked;
-                li.classList.toggle('activo', cb.checked);
-                
-                if (cb.checked) registrosSeleccionados.push(reg);
-                else registrosSeleccionados = registrosSeleccionados.filter(item => item !== reg);
+            li.innerHTML = `<input type="checkbox"> ${reg}`;
+            li.onclick = (e) => {
+                if (e.target.tagName !== 'INPUT') li.querySelector('input').checked = !li.querySelector('input').checked;
+                const isChecked = li.querySelector('input').checked;
+                if (isChecked && !registrosSeleccionados.includes(reg)) registrosSeleccionados.push(reg);
+                if (!isChecked) registrosSeleccionados = registrosSeleccionados.filter(item => item !== reg);
             };
             listaReg.appendChild(li);
         });
-    } catch (e) {
-        listaReg.innerHTML = '<li class="lista-item">Error al cargar registros</li>';
-    }
+    } catch (e) { listaReg.innerHTML = '<li>Error al cargar</li>'; }
 }
 
 document.getElementById('btn-aceptar-filtros').addEventListener('click', () => {
     if (registrosSeleccionados.length > 0) {
-        const text = `${columnaSeleccionada}: ${registrosSeleccionados.join(', ')}`;
-        document.getElementById('txt-filtro-resumen').innerText = text.length > 40 ? text.substring(0, 40) + '...' : text;
+        document.getElementById('txt-filtro-resumen').innerText = `${columnaSeleccionada}: ${registrosSeleccionados.join(', ')}`;
     } else {
-        document.getElementById('txt-filtro-resumen').innerText = "Ningún filtro aplicable seleccionado";
+        document.getElementById('txt-filtro-resumen').innerText = "Ningún filtro";
         columnaSeleccionada = null;
     }
     navigateTo('view-filtros-aplicados');
 });
 
-// VISTA 4: FILTROS APLICADOS
+// FILTROS APLICADOS (Vista 4)
+// UX MEJORADA: Permitir retroceder a modificar el filtro tocando el recuadro
+document.getElementById('txt-filtro-resumen').addEventListener('click', () => {
+    // Solo permitir retroceder si no está en medio de un proceso de carga
+    if(document.getElementById('txt-filtro-resumen').innerText !== "Consolidando...") {
+        navigateTo('view-aplicar-filtros');
+    }
+});
 document.getElementById('btn-consolidar-filtrado').addEventListener('click', () => ejecutarConsolidacion(true));
 
-// LÓGICA CORE: EJECUCIÓN DEL MOTOR
+// EXITO / EJECUCIÓN (Lógica Temporal y Guardado Retrasado)
 async function ejecutarConsolidacion(conFiltro) {
+    // 1. Preguntamos DÓNDE quiere guardarlo
     const pathGuardado = await window.api.solicitarRutaGuardado();
-    if (!pathGuardado) return; // El usuario canceló el diálogo
-
+    if (!pathGuardado) return; // Si cancela, no hacemos nada.
     rutaSalidaFinal = pathGuardado;
-    const payload = {
-        action: 'consolidate',
-        archivos: rutasArchivos,
-        ruta_salida: rutaSalidaFinal
-    };
 
+    // 2. Bloqueamos Interfaz Visual "Consolidando..."
+    const btnActivo = conFiltro ? document.getElementById('btn-consolidar-filtrado') : document.getElementById('btn-consolidar-directo');
+    const oldTextBtn = btnActivo.innerText;
+    btnActivo.innerText = "Procesando...";
+    btnActivo.disabled = true;
+    
+    if(conFiltro) document.getElementById('txt-filtro-resumen').innerText = "Consolidando...";
+    else document.getElementById('txt-cantidad-archivos').innerText = "Consolidando...";
+
+    // 3. Generamos ruta fantasma temporal
+    rutaTemporalMemoria = await window.api.obtenerRutaTemporal();
+
+    const payload = { action: 'consolidate', archivos: rutasArchivos, ruta_salida: rutaTemporalMemoria };
     if (conFiltro && columnaSeleccionada && registrosSeleccionados.length > 0) {
         payload.columna_filtro = columnaSeleccionada;
         payload.registros_validos = registrosSeleccionados;
     }
 
     try {
-        const stats = await window.api.ejecutarMotor(payload);
-        // Exito
+        const stats = await window.api.ejecutarMotor(payload); // Envía a procesar pero guarda en Temp
         document.getElementById('stats-exito').innerHTML = `Peso del archivo: ${stats.peso}<br>Cantidad de filas: ${stats.filas}`;
+        const fileName = rutaSalidaFinal.split('\\').pop().split('/').pop();
+        document.getElementById('nombre-archivo-exito').innerText = fileName;
         navigateTo('view-exito');
-    } catch (e) {
-        alert("Ocurrió un error al consolidar. Verifique los logs.");
+    } catch (e) { 
+        alert("Error al consolidar: " + e); 
+        // Restaurar botones en caso de error
+        btnActivo.innerText = oldTextBtn;
+        btnActivo.disabled = false;
+        if(conFiltro) document.getElementById('txt-filtro-resumen').innerText = `${columnaSeleccionada}: ${registrosSeleccionados.join(', ')}`;
+        else document.getElementById('txt-cantidad-archivos').innerText = `${rutasArchivos.length} cantidad de archivos`;
     }
 }
 
-// VISTA 5: ÉXITO
-document.getElementById('btn-descargar').addEventListener('click', () => {
-    // Al ser una app local y ya haber pedido la ruta antes, "Descargar" puede simplemente abrir la carpeta contenedora.
-    alert(`El archivo ya ha sido guardado exitosamente en:\n${rutaSalidaFinal}`);
-    // Opcional: Reiniciar la app
-    setTimeout(() => location.reload(), 1500);
+// FINAL (Vista 5): Aquí ocurre el guardado físico real
+document.getElementById('btn-descargar').addEventListener('click', async () => {
+    document.getElementById('btn-descargar').innerText = "Guardando...";
+    document.getElementById('btn-descargar').disabled = true;
+
+    // Movemos el temporal oculto a la ruta final que eligió antes
+    const exito = await window.api.guardarArchivoFinal(rutaTemporalMemoria, rutaSalidaFinal);
+    
+    if(exito) {
+        alert(`Archivo guardado exitosamente en:\n${rutaSalidaFinal}`);
+        setTimeout(() => location.reload(), 500); // Volvemos al inicio para otro lote
+    } else {
+        alert("Ocurrió un error al intentar transferir el archivo a la ruta final.");
+        document.getElementById('btn-descargar').innerText = "Descargar";
+        document.getElementById('btn-descargar').disabled = false;
+    }
 });

@@ -20,7 +20,7 @@
     "productName": "KIWI",
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "src/icon.ico"
     },
     "mac": {
       "target": "dmg",

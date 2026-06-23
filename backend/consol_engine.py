@@ -2,113 +2,91 @@ import pandas as pd
 import os
 import sys
 import json
+import io
+
+# ESENCIAL: Forzar I/O en UTF-8 para evitar choques con el entorno de Windows
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 def enviar_respuesta(status, data=None, message=None):
-    """Envía una salida estructurada en JSON por stdout para que Node.js la parsee."""
     response = {"status": status}
-    if data is not None:
-        response["data"] = data
-    if message is not None:
-        response["message"] = message
+    if data is not None: response["data"] = data
+    if message is not None: response["message"] = message
     print(json.dumps(response))
     sys.stdout.flush()
 
 def obtener_columnas(archivos):
-    """Extrae las columnas del primer archivo válido (asumiendo estructura homogénea)."""
     for ruta in archivos:
         try:
-            df = pd.read_excel(ruta, nrows=0)
+            # Forzamos engine='openpyxl' y leemos solo la cabecera (0 filas)
+            df = pd.read_excel(ruta, nrows=0, engine='openpyxl')
             columnas = df.columns.tolist()
-            enviar_respuesta("success", data={"columnas": columnas})
-            return
+            if columnas:
+                enviar_respuesta("success", data={"columnas": columnas})
+                return
         except Exception as e:
-            enviar_respuesta("log", message=f"LOG_WARN: No se pudo leer {os.path.basename(ruta)}")
+            enviar_respuesta("log", message=f"No se pudo extraer cabecera de {os.path.basename(ruta)}: {str(e)}")
+    
     enviar_respuesta("error", message="No se encontraron columnas válidas en los archivos proporcionados.")
 
 def obtener_registros_unicos(archivos, columna):
-    """Extrae los valores únicos de una columna específica combinando todos los archivos."""
     valores_unicos = set()
     for ruta in archivos:
         try:
-            df = pd.read_excel(ruta, usecols=[columna])
+            df = pd.read_excel(ruta, usecols=[columna], engine='openpyxl')
             valores_unicos.update(df[columna].dropna().unique().tolist())
-        except ValueError:
-            enviar_respuesta("log", message=f"LOG_WARN: La columna '{columna}' no existe en {os.path.basename(ruta)}.")
         except Exception as e:
-            enviar_respuesta("log", message=f"LOG_WARN: Error al procesar {os.path.basename(ruta)} - {str(e)}")
+            enviar_respuesta("log", message=f"Omitiendo archivo {os.path.basename(ruta)}: {str(e)}")
             
     enviar_respuesta("success", data={"registros": sorted(list(valores_unicos))})
 
 def consolidar_archivos(archivos, ruta_salida, columna_filtro=None, registros_validos=None):
-    """Une los archivos, inyecta la trazabilidad, filtra y exporta a CSV utf-8-sig."""
     dataframes = []
     
     for ruta in archivos:
         try:
-            enviar_respuesta("log", message=f"Procesando: {os.path.basename(ruta)}...")
-            df = pd.read_excel(ruta)
+            df = pd.read_excel(ruta, engine='openpyxl')
             
-            # Tolerancia a fallos: Si hay filtro pero el archivo no tiene la columna
             if columna_filtro and registros_validos:
                 if columna_filtro in df.columns:
                     df = df[df[columna_filtro].isin(registros_validos)].copy()
                 else:
-                    enviar_respuesta("log", message=f"LOG_WARN: Columna '{columna_filtro}' ausente en {os.path.basename(ruta)}. Archivo omitido/procesado sin filtro.")
-                    df = pd.DataFrame() # Omitimos los registros de este archivo si no tiene la columna a filtrar
+                    df = pd.DataFrame()
             
-            # Inyección de metadatos de trazabilidad
             if not df.empty:
                 df['Archivo_Origen'] = os.path.basename(ruta)
                 dataframes.append(df)
-                
         except Exception as e:
-            enviar_respuesta("log", message=f"LOG_WARN: Error fatal en {os.path.basename(ruta)}: {str(e)}")
+            enviar_respuesta("log", message=f"Fallo en {os.path.basename(ruta)}: {str(e)}")
 
     if not dataframes:
         enviar_respuesta("error", message="Ningún dato válido para consolidar.")
         return
 
-    enviar_respuesta("log", message="Concatenando datos y generando archivo final...")
     df_final = pd.concat(dataframes, ignore_index=True)
-    
-    # Exportar (utf-8-sig requerido por PRD para MS Excel)
     df_final.to_csv(ruta_salida, encoding='utf-8-sig', index=False)
     
-    # Calcular estadísticas finales
     peso_bytes = os.path.getsize(ruta_salida)
     peso_mb = round(peso_bytes / (1024 * 1024), 2)
-    peso_formateado = f"{peso_mb} mb" if peso_mb >= 1 else f"{round(peso_bytes / 1024, 2)} kb"
+    peso_formateado = f"{peso_mb} gb" if peso_mb >= 1024 else f"{peso_mb} mb" 
     
-    enviar_respuesta("success", data={
-        "peso": peso_formateado,
-        "filas": len(df_final)
-    })
+    enviar_respuesta("success", data={"peso": peso_formateado, "filas": len(df_final)})
 
 def main():
-    # Leer input en formato JSON enviado por Electron a través de stdin
-    linea = sys.stdin.read()
-    if not linea:
-        return
-        
     try:
+        linea = sys.stdin.readline()
+        if not linea: return
         payload = json.loads(linea)
+        
         accion = payload.get("action")
         archivos = payload.get("archivos", [])
         
-        if accion == "get_columns":
-            obtener_columnas(archivos)
-        elif accion == "get_unique":
-            columna = payload.get("columna")
-            obtener_registros_unicos(archivos, columna)
-        elif accion == "consolidate":
-            ruta_salida = payload.get("ruta_salida")
-            columna_filtro = payload.get("columna_filtro")
-            registros_validos = payload.get("registros_validos")
-            consolidar_archivos(archivos, ruta_salida, columna_filtro, registros_validos)
-        else:
-            enviar_respuesta("error", message="Acción desconocida.")
+        if accion == "get_columns": obtener_columnas(archivos)
+        elif accion == "get_unique": obtener_registros_unicos(archivos, payload.get("columna"))
+        elif accion == "consolidate": consolidar_archivos(archivos, payload.get("ruta_salida"), payload.get("columna_filtro"), payload.get("registros_validos"))
     except Exception as e:
-        enviar_respuesta("error", message=str(e))
+        enviar_respuesta("error", message=f"Fallo crítico en Python: {str(e)}")
 
 if __name__ == "__main__":
     main()
