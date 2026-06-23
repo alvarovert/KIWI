@@ -1,0 +1,263 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+:root {
+    /* Paleta de Colores Exacta */
+    --color-bg-general: #FFF9DD;
+    --color-bg-dropzone: #9CE67D;
+    --color-bg-procesar: #81D65D;
+    --color-bg-app-name: #81D65D;
+    --color-bg-paneles: #9CE67D;
+    --color-foco-activo: #00690A;
+    --color-texto-universal: #00690A;
+    
+    /* Variables Geometría / Animación */
+    --app-width: 600px;
+    --app-height: 300px;
+    --anim-duration: 350ms;
+    --anim-curve: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* RESET Y ESTRUCTURA BASE */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', Arial, sans-serif;
+    color: var(--color-texto-universal);
+    user-select: none;
+}
+
+body {
+    width: var(--app-width);
+    height: var(--app-height);
+    background-color: var(--color-bg-general);
+    overflow: hidden;
+    position: relative;
+}
+
+#app-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* SISTEMA SPA Y ANIMACIONES FLUIDAS */
+.view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(100% - 20px); /* Resta el espacio del footer */
+    display: flex;
+    opacity: 0;
+    transform: translateX(30px);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity var(--anim-duration) var(--anim-curve),
+                transform var(--anim-duration) var(--anim-curve),
+                visibility var(--anim-duration);
+}
+
+.view.active {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: all;
+    transition: opacity var(--anim-duration) var(--anim-curve),
+                transform var(--anim-duration) var(--anim-curve);
+}
+
+.view.exit {
+    opacity: 0;
+    transform: translateX(-30px);
+    pointer-events: none;
+}
+
+/* PANELES LATERALES (Sección CONSOL/Logs) */
+.panel-lateral {
+    background-color: var(--color-bg-app-name);
+    width: 35%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 15px;
+    text-align: center;
+}
+
+.panel-contenido {
+    width: 65%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    position: relative;
+}
+
+.flex-col-center {
+    justify-content: space-evenly;
+}
+
+/* ESCALA PROPORCIONAL DE FUENTES */
+.app-name { font-weight: 700; }
+.app-name-inicio { font-size: 36px; }
+.app-name-mid { font-size: 28px; }
+.app-name-small { font-size: 16px; }
+
+.log-text {
+    margin-top: 10px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* COMPONENTES ESPECÍFICOS */
+.dropzone {
+    width: 90%;
+    height: 120px;
+    background-color: var(--color-bg-dropzone);
+    border: 2px dashed var(--color-texto-universal);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    cursor: pointer;
+}
+
+.dropzone.dragover {
+    background-color: var(--color-bg-procesar);
+    border-style: solid;
+}
+
+.drop-text { font-size: 20px; font-weight: 500; text-align: center; padding: 10px;}
+
+/* BOTONES */
+.btn {
+    border: none;
+    border-radius: 4px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.1s;
+}
+
+.btn:active:not(:disabled) { transform: scale(0.97); }
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-procesar {
+    background-color: var(--color-bg-procesar);
+    font-size: 15px;
+    padding: 10px 30px;
+}
+
+.btn-procesar:hover:not(:disabled) { background-color: #6bc247; }
+
+.btn-filtros {
+    background-color: var(--color-bg-dropzone);
+    font-size: 20px;
+    padding: 12px 20px;
+    margin-bottom: 10px;
+    width: 100%;
+}
+.btn-filtros:hover { background-color: #85d964; }
+
+.btn-filtros-aceptar {
+    background-color: var(--color-bg-paneles);
+    font-size: 15px;
+    padding: 8px 40px;
+}
+.btn-filtros-aceptar:hover { background-color: #85d964; }
+
+.btn-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80%;
+}
+
+/* TEXTOS DE INFORMACIÓN Y RESUMEN */
+.info-text { font-size: 20px; font-weight: 500; margin-bottom: 15px; }
+.texto-resumen { font-size: 18px; font-weight: 500; text-align: center; }
+.stats-text { font-size: 16px; font-weight: 500; text-align: center; margin-bottom: 15px; line-height: 1.4; }
+.caja-nombre-archivo { font-size: 16px; font-weight: 700; background-color: var(--color-bg-dropzone); padding: 10px 20px; border-radius: 4px; margin-bottom: 10px; }
+.resumen-box { background-color: var(--color-bg-dropzone); padding: 15px; border-radius: 6px; margin-bottom: 15px; width: 90%; display: flex; justify-content: center; }
+
+/* VISTA: APLICAR FILTROS (Doble Columna) */
+.panel-filtros-container {
+    width: 100%;
+    height: 85%;
+    display: flex;
+}
+
+.columna-filtro {
+    width: 50%;
+    height: 100%;
+    background-color: var(--color-bg-paneles);
+    border-right: 1px solid var(--color-bg-general);
+    display: flex;
+    flex-direction: column;
+}
+
+.columna-filtro:last-child { border-right: none; }
+
+.header-filtro {
+    font-size: 24px;
+    text-align: center;
+    padding: 10px 0;
+    background-color: var(--color-bg-procesar);
+}
+
+.lista-interactiva {
+    list-style: none;
+    overflow-y: auto;
+    flex-grow: 1;
+    padding: 5px;
+}
+
+/* Scrollbar estilizado para la lista */
+.lista-interactiva::-webkit-scrollbar { width: 6px; }
+.lista-interactiva::-webkit-scrollbar-thumb { background-color: var(--color-texto-universal); border-radius: 3px; }
+
+.lista-item {
+    font-size: 14px;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    cursor: pointer;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.lista-item:hover { background-color: rgba(0, 105, 10, 0.1); }
+
+.lista-item.activo {
+    background-color: var(--color-foco-activo);
+    color: var(--color-bg-general);
+}
+
+.footer-filtros {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 15%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--color-bg-general);
+}
+
+/* FOOTER UNIVERSAL */
+.app-footer {
+    position: absolute;
+    bottom: 5px;
+    width: 100%;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 500;
+}

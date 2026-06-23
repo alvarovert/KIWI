@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <!-- CSP Básico de Seguridad -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
+    <title>KIWI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- VISTA 1: INICIO -->
+        <section id="view-inicio" class="view active">
+            <div class="panel-lateral view-inicio-lateral">
+                <h1 class="app-name app-name-inicio">KIWI</h1>
+            </div>
+            <div class="panel-contenido">
+                <div id="dropzone" class="dropzone">
+                    <span class="drop-text">Arrastrar archivos o hacer clic</span>
+                </div>
+                <button id="btn-procesar-inicio" class="btn btn-procesar" disabled>Procesar</button>
+            </div>
+        </section>
+
+        <!-- VISTA 2: SELECCIONADOS -->
+        <section id="view-seleccionados" class="view">
+            <div class="panel-lateral view-seleccionados-lateral">
+                <h1 class="app-name app-name-mid">KIWI</h1>
+                <div id="log-archivos-seleccionados" class="log-text"></div>
+            </div>
+            <div class="panel-contenido flex-col-center">
+                <h2 id="txt-cantidad-archivos" class="info-text">[0] archivos seleccionados</h2>
+                <div class="btn-group">
+                    <button id="btn-aplicar-filtros" class="btn btn-filtros">Aplicar filtros</button>
+                    <button id="btn-consolidar-directo" class="btn btn-procesar">Consolidar</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA 3: APLICAR FILTROS -->
+        <section id="view-aplicar-filtros" class="view">
+            <div class="panel-filtros-container">
+                <div class="columna-filtro">
+                    <h3 class="header-filtro">Columnas</h3>
+                    <ul id="lista-columnas" class="lista-interactiva">
+                        <!-- Llenado dinámico -->
+                    </ul>
+                </div>
+                <div class="columna-filtro">
+                    <h3 class="header-filtro">Registros</h3>
+                    <ul id="lista-registros" class="lista-interactiva">
+                        <!-- Llenado dinámico -->
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-filtros">
+                <button id="btn-aceptar-filtros" class="btn btn-filtros-aceptar">ACEPTAR</button>
+            </div>
+        </section>
+
+        <!-- VISTA 4: FILTROS APLICADOS -->
+        <section id="view-filtros-aplicados" class="view">
+            <div class="panel-lateral view-filtros-lateral">
+                <h1 class="app-name app-name-mid">KIWI</h1>
+                <div id="log-filtros-activos" class="log-text"></div>
+            </div>
+            <div class="panel-contenido flex-col-center">
+                <div id="resumen-filtros" class="resumen-box">
+                    <span id="txt-filtro-resumen" class="texto-resumen">Ningún filtro</span>
+                </div>
+                <button id="btn-consolidar-filtrado" class="btn btn-procesar">Consolidar</button>
+            </div>
+        </section>
+
+        <!-- VISTA 5: EXITO -->
+        <section id="view-exito" class="view">
+            <div class="panel-lateral view-exito-lateral">
+                <h1 class="app-name app-name-small">KIWI</h1>
+                <div class="log-text app-name-small">¡Proceso Terminado!</div>
+            </div>
+            <div class="panel-contenido flex-col-center">
+                <div class="caja-nombre-archivo">Consolidado.csv</div>
+                <div id="stats-exito" class="stats-text">
+                    Peso: 0 mb<br>Filas: 0
+                </div>
+                <button id="btn-descargar" class="btn btn-procesar">Descargar</button>
+            </div>
+        </section>
+        
+        <!-- FOOTER UNIVERSAL -->
+        <footer class="app-footer">Hecho por Alvaro Menacho</footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
