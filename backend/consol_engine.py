@@ -4,7 +4,6 @@ import sys
 import json
 import io
 
-# ESENCIAL: Forzar I/O en UTF-8 para evitar choques con el entorno de Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
@@ -17,43 +16,50 @@ def enviar_respuesta(status, data=None, message=None):
     sys.stdout.flush()
 
 def obtener_columnas(archivos):
-    for ruta in archivos:
+    # IDEA DEL USUARIO: Ordenar los archivos por tamaño (el más liviano primero)
+    archivos_ordenados = sorted(archivos, key=lambda x: os.path.getsize(x) if os.path.exists(x) else float('inf'))
+    
+    for ruta in archivos_ordenados:
         try:
-            # Forzamos engine='openpyxl' y leemos solo la cabecera (0 filas)
             df = pd.read_excel(ruta, nrows=0, engine='openpyxl')
             columnas = df.columns.tolist()
             if columnas:
                 enviar_respuesta("success", data={"columnas": columnas})
                 return
         except Exception as e:
-            enviar_respuesta("log", message=f"No se pudo extraer cabecera de {os.path.basename(ruta)}: {str(e)}")
+            enviar_respuesta("log", message=f"Omitiendo {os.path.basename(ruta)}: {str(e)}")
     
-    enviar_respuesta("error", message="No se encontraron columnas válidas en los archivos proporcionados.")
+    enviar_respuesta("error", message="No se encontraron columnas válidas.")
 
 def obtener_registros_unicos(archivos, columna):
     valores_unicos = set()
-    for ruta in archivos:
+    # IDEA DEL USUARIO: Ordenar los archivos por tamaño para leer los registros más rápido
+    archivos_ordenados = sorted(archivos, key=lambda x: os.path.getsize(x) if os.path.exists(x) else float('inf'))
+    
+    for ruta in archivos_ordenados:
         try:
             df = pd.read_excel(ruta, usecols=[columna], engine='openpyxl')
             valores_unicos.update(df[columna].dropna().unique().tolist())
+            break # MAGIA: Lee el más pequeño, saca los únicos y se detiene.
         except Exception as e:
             enviar_respuesta("log", message=f"Omitiendo archivo {os.path.basename(ruta)}: {str(e)}")
+            continue
             
-    enviar_respuesta("success", data={"registros": sorted(list(valores_unicos))})
+    if valores_unicos:
+        enviar_respuesta("success", data={"registros": sorted(list(valores_unicos))})
+    else:
+        enviar_respuesta("error", message=f"No se encontraron datos para la columna '{columna}'.")
 
 def consolidar_archivos(archivos, ruta_salida, columna_filtro=None, registros_validos=None):
     dataframes = []
-    
     for ruta in archivos:
         try:
             df = pd.read_excel(ruta, engine='openpyxl')
-            
             if columna_filtro and registros_validos:
                 if columna_filtro in df.columns:
                     df = df[df[columna_filtro].isin(registros_validos)].copy()
                 else:
                     df = pd.DataFrame()
-            
             if not df.empty:
                 df['Archivo_Origen'] = os.path.basename(ruta)
                 dataframes.append(df)

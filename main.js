@@ -53,14 +53,22 @@ ipcMain.handle('file:moveFinal', (event, tempPath, finalPath) => {
     }
 });
 
-// EL MOTOR SE MANTIENE INTACTO
+// EL MOTOR CON SOPORTE PARA MODO DESARROLLO SIN COMPILAR
 ipcMain.handle('engine:run', (event, payload) => {
     return new Promise((resolve, reject) => {
-        let enginePath = app.isPackaged 
-            ? path.join(process.resourcesPath, 'engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine')
-            : path.join(__dirname, 'backend', 'dist', 'consol_engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine');
+        
+        let pythonProcess;
+        
+        if (app.isPackaged) {
+            // Cuando la app ya esté exportada para el cliente final
+            const enginePath = path.join(process.resourcesPath, 'engine', process.platform === 'win32' ? 'consol_engine.exe' : 'consol_engine');
+            pythonProcess = spawn(enginePath);
+        } else {
+            // MODO DESARROLLO: Ejecuta directamente el script .py (¡Ya no requiere compilar a cada rato!)
+            const scriptPath = path.join(__dirname, 'backend', 'consol_engine.py');
+            pythonProcess = spawn('python', [scriptPath]);
+        }
 
-        const pythonProcess = spawn(enginePath);
         let outputData = null;
 
         pythonProcess.stdin.write(JSON.stringify(payload) + '\n');
@@ -81,7 +89,7 @@ ipcMain.handle('engine:run', (event, payload) => {
         pythonProcess.stderr.on('data', (data) => console.error(`Error Backend: ${data}`));
         pythonProcess.on('close', (code) => {
             if (code === 0 && outputData) resolve(outputData);
-            else reject(`Fallo en Python (Cód: ${code}).`);
+            else reject(`Fallo en Python (Cód: ${code}). Asegúrate de tener pandas instalado.`);
         });
     });
 });
