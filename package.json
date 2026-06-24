@@ -1,6 +1,6 @@
 {
   "name": "consol",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "Herramienta de escritorio ligera para unificar y filtrar múltiples archivos Excel.",
   "main": "main.js",
   "scripts": {
