@@ -1,0 +1,6 @@
+# Dependencias de Node
+node_modules/
+
+# Archivos de compilación / distribución
+backend/build/
+backend/dist/
