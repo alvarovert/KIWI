@@ -1,0 +1,11 @@
+# Carpetas de compilación / build
+build/
+dist/
+backend/build/
+backend/dist/
+
+# Archivos de configuración de PyInstaller
+*.spec
+
+# Dependencias de Node.js
+node_modules/
