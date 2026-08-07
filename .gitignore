@@ -4,9 +4,14 @@ build/
 dist/
 backend/build/
 backend/dist/
+backend/venv/
+backend/.DS_Store
+backend/consol_engine.spec
 
 # Archivos de configuración de PyInstaller
 *.spec
 
 # Dependencias de Node.js
 node_modules/
+
+.DS_Store
